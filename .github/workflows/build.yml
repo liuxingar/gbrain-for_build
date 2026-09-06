@@ -1,0 +1,78 @@
+name: build-push
+
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository_owner }}/gbrain
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork (build files)
+        uses: actions/checkout@v4
+
+      - name: Resolve latest release tag
+        id: ver
+        run: |
+          TAG="$(curl -fsS https://api.github.com/repos/garrytan/gbrain/releases/latest | jq -r '.tag_name')"
+          [ -n "$TAG" ] && [ "$TAG" != "null" ] || { echo "::error::resolve tag failed"; exit 1; }
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "resolved gbrain version: $TAG"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if already published
+        id: check
+        run: |
+          if docker manifest inspect "${IMAGE}:${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "already published, skip"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push
+        if: steps.check.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .build
+          file: .build/Dockerfile
+          push: true
+          build-args: |
+            GBRAIN_VERSION=${{ steps.ver.outputs.version }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.ver.outputs.version }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Notify MeoW
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
+              TITLE="gbrain 检测"
+              MSG="无新版本（当前 ${{ steps.ver.outputs.version }}）"
+            else
+              TITLE="gbrain 构建完成"
+              MSG="新版本 ${{ steps.ver.outputs.version }} 已推送到 ghcr.io/${{ github.repository_owner }}/gbrain"
+            fi
+          else
+            TITLE="gbrain 构建失败"
+            MSG="版本 ${{ steps.ver.outputs.version }} 构建失败，请查看 Actions 日志"
+          fi
+          curl -fsS -X POST https://api.chuckfang.com/shangzw \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$(jq -nc --arg t "$TITLE" --arg m "$MSG" '{title:$t, msg:$m}')"
