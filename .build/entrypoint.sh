@@ -3,6 +3,9 @@
 set -eu
 
 export HOME="${GBRAIN_HOME:-/data}"
+# 局域网 http 部署：MCP SDK 的 OAuth issuer 默认强制 HTTPS，
+# 官方开关 MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL 显式放行（仅限非生产/局域网）。
+export MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL=true
 BRAIN_DIR="$HOME/.gbrain"
 
 if [ ! -f "$BRAIN_DIR/config.json" ]; then
