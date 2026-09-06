@@ -14,8 +14,8 @@ else
   # 重启后新 PID 1 又常驻，导致 gbrain 误判锁被占用而拒绝启动 → 崩溃循环）
   LOCK="$BRAIN_DIR/brain.pglite/.gbrain-lock"
   if [ -e "$LOCK" ]; then
-    echo "[gbrain] removing stale PGLite lock"
-    rm -f "$LOCK"
+    echo "[gbrain] removing stale PGLite lock (dir-or-file)"
+    rm -rf "$LOCK"
   fi
 fi
 
