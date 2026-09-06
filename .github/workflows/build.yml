@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force rebuild even if version tag exists'
+        required: false
+        default: 'false'
+        type: string
 
 permissions:
   contents: read
@@ -38,7 +44,10 @@ jobs:
       - name: Check if already published
         id: check
         run: |
-          if docker manifest inspect "${IMAGE}:${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+          if [ "${{ inputs.force || 'false' }}" = "true" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "force rebuild requested, skip exists check"
+          elif docker manifest inspect "${IMAGE}:${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "already published, skip"
           else
